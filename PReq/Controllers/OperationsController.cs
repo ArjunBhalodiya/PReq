@@ -1,9 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using PReq.Models;
+using PReq.Resources;
+using PReq.Utility;
 
 namespace PReq.Controllers
 {
@@ -11,59 +10,22 @@ namespace PReq.Controllers
     [ApiController]
     public class OperationsController : ControllerBase
     {
-        [HttpGet("requests/process")]
-        public async Task<string> ProcessRequests()
+        private readonly IOperationsUtility operationsUtility;
+
+        public OperationsController(IOperationsUtility _operationsUtility)
         {
-            return await ProcessPipelinesAsync().ConfigureAwait(false);
+            operationsUtility = _operationsUtility;
         }
 
-        private async Task<string> ProcessPipelinesAsync()
+        [HttpPost("requests/process")]
+        public async Task<string> ProcessRequests(AnalyzeRequestModel request,
+                                                  int numberOfPipeline,
+                                                  int requestPerPipeline)
         {
-            List<Task<StringBuilder>> sendRequestTasks = new List<Task<StringBuilder>>();
+            operationsUtility.ProcessPipelinesAsync(request, numberOfPipeline, requestPerPipeline)
+                                          .ConfigureAwait(false);
 
-            var builder = new StringBuilder();
-            builder.AppendLine("Result,PilelineId,RequestId,StartAt,EndAt,TotalTime(ms)");
-
-            for (int pipeline = 0; pipeline < 5; pipeline++)
-            {
-                sendRequestTasks.Add(ProcessPipelineAsync());
-            }
-
-            foreach (var sendRequestTask in sendRequestTasks)
-            {
-                var requestLogStringBuilder = await sendRequestTask.ConfigureAwait(false);
-                builder.Append(requestLogStringBuilder.ToString());
-            }
-
-            return builder.ToString();
-        }
-
-        private async Task<StringBuilder> ProcessPipelineAsync()
-        {
-            var pipelineId = Guid.NewGuid().ToString();
-            return await ProcessRequestsAsync(pipelineId).ConfigureAwait(false);
-        }
-
-        private async Task<StringBuilder> ProcessRequestsAsync(string pipelineId)
-        {
-            var builder = new StringBuilder();
-
-            for (int requestCount = 0; requestCount < 15; requestCount++)
-            {
-                var requestId = Guid.NewGuid().ToString();
-                var startAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-                var client = new HttpClient();
-                var response = await client.GetAsync("https://ist.homegenius.com/Gateway/v1/public/locations?cityCode=mi").ConfigureAwait(false);
-
-                var endAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                if (response.IsSuccessStatusCode)
-                    builder.AppendLine($"SUCCESS,{pipelineId},{requestId},{DateTimeOffset.FromUnixTimeMilliseconds(startAt)},{DateTimeOffset.FromUnixTimeMilliseconds(endAt)},{endAt - startAt}");
-                else
-                    builder.AppendLine($"FAIL,{pipelineId},{requestId},{DateTimeOffset.FromUnixTimeMilliseconds(startAt)},{DateTimeOffset.FromUnixTimeMilliseconds(endAt)},{endAt - startAt}");
-            }
-
-            return builder;
+            return Messages.WeWillSendEmailOnceAnalysisWillBeDone;
         }
     }
 }
